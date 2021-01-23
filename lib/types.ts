@@ -7,8 +7,8 @@ export interface WhiteSourceAgentConfiguration {
 	projectTag?: number;
 	projectName?: string;
 	productName?: string;
-	includes?: string;
-	excludes?: string;
+	includes: string[];
+	excludes?: string[];
 	configFilePath?: string;
 	apiKey?: string;
 	whiteSourceFolderPath?: string;
@@ -33,7 +33,12 @@ export interface WhiteSourceAgentConfiguration {
 	productToken?: number;
 	offline?: boolean;
 	log?: {
-		level?: string;
+		files: {
+			level?: "trace" | "debug" | "info" | "warn" | "error" | "off";
+			maxFileSize?: number;
+			maxFilesCount?: number;
+			path?: string;
+		}
 	};
 	ignoreSourceFiles?: boolean;
 	iaLanguage?: number;
@@ -359,13 +364,22 @@ export interface RunAgentOptions {
 	 */
 	agentConfig: WhiteSourceAgentConfiguration;
 	/**
-	 * Working directory to scan
+	 * Directories to scan
 	 * If not passed, will run on current directory
 	 *
 	 * @type {string}
 	 * @memberof RunAgentOptions
 	 */
-	dir?: string;
+	dirs?: string[];
+	/**
+	 * Version of the agent to run.
+	 * Will download the file if not available locally
+	 * Defaults to "latest", but keep in mind that this will always trigger a download, regardless to the locally available files
+	 *
+	 * @type {string}
+	 * @memberof RunAgentOptions
+	 */
+	agentVersion?: string;
 	/**
 	 * Callback to be invoked on each log line during the scan
 	 *
