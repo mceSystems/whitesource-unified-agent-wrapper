@@ -106,3 +106,7 @@ dist
 lib/agent
 lib/logs
 example/nocommit.ts
+*.js
+*.js.map
+*.d.ts
+.vscode

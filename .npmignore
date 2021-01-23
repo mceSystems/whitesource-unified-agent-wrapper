@@ -1,0 +1,7 @@
+*.ts
+!*.d.ts
+*.tgz
+.vscode
+whitesource
+lib/agent
+lib/logs
