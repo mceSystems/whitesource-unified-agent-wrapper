@@ -50,6 +50,14 @@ function objectToEntries(prefix: string, obj: Record<string, any>) {
 	})
 }
 
+/**
+ * Turn specific field from one form to another
+ * For example, the agent configuration docs states the "includes" field should be a comma/space/semicolon-separated string,
+ * while the interface states it should be an array of strings (fro convenience). Here we transform one to the other 
+ *
+ * @param {WhiteSourceAgentConfiguration} config
+ * @returns {Record<string, any>}
+ */
 function modifyConfigurationSpecialFields(config: WhiteSourceAgentConfiguration): Record<string, any> {
 	const configCopy = JSON.parse(JSON.stringify(config));
 	if (configCopy.includes) configCopy.includes = configCopy.includes.join(";");
@@ -64,7 +72,7 @@ function modifyConfigurationSpecialFields(config: WhiteSourceAgentConfiguration)
  * @returns {string}
  */
 async function buildConfigurationFile(config: WhiteSourceAgentConfiguration): Promise<string> {
-	const logFilePath = path.resolve(os.tmpdir(), `wss-unified-agent.${Date.now()}.${Math.round(Math.random() * 10000)}.config`);
+	const configFilePath = path.resolve(os.tmpdir(), `wss-unified-agent.${nowWithRandom()}.config`);
 	const modifiedConfig = modifyConfigurationSpecialFields(config);
 	const configEntires = objectToEntries("", modifiedConfig);
 
@@ -79,8 +87,8 @@ async function buildConfigurationFile(config: WhiteSourceAgentConfiguration): Pr
 		toIterate.push(...toIterate[i]);
 	}
 
-	await fs.writeFile(logFilePath, configPairs.map(entry => entry.join("=")).join("\n"));
-	return logFilePath;
+	await fs.writeFile(configFilePath, configPairs.map(entry => entry.join("=")).join("\n"));
+	return configFilePath;
 }
 
 /**
@@ -104,6 +112,7 @@ async function ensureAgent(version: string): Promise<string> {
 		: `https://github.com/whitesource/unified-agent-distribution/releases/download/v${version}/wss-unified-agent.jar`;
 	debug(`Downloading agent from ${agentFileUrl}`);
 	const response = await fetch(agentFileUrl);
+	debug("Agent download response ok?", response.ok);
 	if (!response.ok) {
 		throw new Error(`Failed to download agent: ${response.statusText}`);
 	}
@@ -121,7 +130,7 @@ async function ensureAgent(version: string): Promise<string> {
 function executeAgentCommand(command: string): Promise<number> {
 	return new Promise<number>((res) => {
 		exec(command, {
-			maxBuffer: 100 * 1024 * 1024 * 1024
+			maxBuffer: 100 * 1024 * 1024 * 1024,
 		}, (err) => {
 			res(err?.code || 0);
 		});
@@ -138,13 +147,13 @@ function executeAgentCommand(command: string): Promise<number> {
  */
 async function handleLogFiles({ agentConfig: config, onLogLine }: RunAgentOptions): Promise<{ shouldDelete: boolean; logsPath: string, stopWatching: () => void }> {
 	if (!onLogLine) {
-		throw new Error("handleLogFiles will only work if onLogLine is set")
+		throw new Error("handleLogFiles will only work if onLogLine is set");
 	}
 	const shouldDelete = !config.log?.files.path;
 	const logsPath = config.log?.files.path || path.resolve(__dirname, "logs", `${nowWithRandom()}.log`);
 	if (!config.log) {
 		config.log = {
-			files: {}
+			files: {},
 		};
 	}
 	if (!config.log.files) {
@@ -155,13 +164,14 @@ async function handleLogFiles({ agentConfig: config, onLogLine }: RunAgentOption
 
 	let logFilesWatcher: fs.FSWatcher | null = null;
 	let currentFileTail: Tail | null = null;
-	const topLevelWatcher = fs.watch(logsPath, (topEvent: string, topFilename: string) => {
+	let topLevelWatcher = fs.watch(logsPath, (topEvent: string, topFilename: string) => {
 		if ("rename" == topEvent) {
 			const internalFolderToWatch = path.resolve(logsPath, topFilename);
 			topLevelWatcher.close();
+			topLevelWatcher = null;
 
 			const newLineReader = async (logFile) => {
-				const fullLogFilePath = path.resolve(internalFolderToWatch, logFile)
+				const fullLogFilePath = path.resolve(internalFolderToWatch, logFile);
 				debug("New log watcher for", logFile);
 				if (currentFileTail) {
 					currentFileTail.unwatch();
@@ -185,6 +195,9 @@ async function handleLogFiles({ agentConfig: config, onLogLine }: RunAgentOption
 	});
 
 	const stopWatching = () => {
+		if (topLevelWatcher) {
+			topLevelWatcher.close();
+		}
 		if (logFilesWatcher) {
 			logFilesWatcher.close();
 		}
@@ -201,50 +214,67 @@ async function handleLogFiles({ agentConfig: config, onLogLine }: RunAgentOption
 }
 
 export default async function runAgent(options: RunAgentOptions): Promise<void> {
-	await verifyJavaInPath();
-	verifyOptions(options);
-	const {
-		agentConfig,
-		agentVersion = "latest",
-		dirs = [process.cwd()],
-		onLogLine
-	} = options;
+	const cleanupProcedures: Array<(() => Promise<void>) | (() => void)> = [];
+	let error: Error | null = null;
+	try {
+		await verifyJavaInPath();
+		verifyOptions(options);
 
-	let shouldDeleteLogDir = false;
-	let stopWatchingLogs = () => { };
-	let logsPath = "";
-	if (onLogLine) {
-		({ logsPath, shouldDelete: shouldDeleteLogDir, stopWatching: stopWatchingLogs } = await handleLogFiles(options));
-		debug("Log files path:", logsPath);
-		debug("Will logs be delete?", shouldDeleteLogDir);
-	} else {
-		debug("Not watching logs");
+		const {
+			agentConfig,
+			agentVersion = "latest",
+			dirs = [process.cwd()],
+			onLogLine,
+		} = options;
+
+		if (onLogLine) {
+			const { logsPath, shouldDelete: shouldDeleteLogDir, stopWatching: stopWatchingLogs } = await handleLogFiles(options);
+			debug("Log files path:", logsPath);
+			debug("Will logs be delete?", shouldDeleteLogDir);
+			cleanupProcedures.push(async () => {
+				stopWatchingLogs();
+				if (shouldDeleteLogDir) {
+					await fs.remove(logsPath);
+					debug(`Log files dir deleted ${logsPath}`);
+				}
+			});
+		} else {
+			debug("Not watching logs");
+		}
+
+
+		const configurationFilePath = await buildConfigurationFile(agentConfig);
+		debug(`Configuration file created in ${configurationFilePath}`);
+		cleanupProcedures.push(async () => {
+			await fs.remove(configurationFilePath);
+			debug(`Configuration file deleted ${configurationFilePath}`);
+		});
+
+		debug(`Making sure we have agent version ${agentVersion}`);
+		const jarPath = await ensureAgent(agentVersion);
+		const dirsToScan = dirs.join(",");
+		debug(`Scanning directories ${dirsToScan}`);
+		const command = `java -jar ${jarPath} -c ${configurationFilePath} -d ${dirsToScan} -logLevel off`;
+		debug(`Full command: ${command}`);
+
+		const exitCode = await executeAgentCommand(command);
+		debug(`Agent process exit code: ${exitCode}`);
+		if (0 !== exitCode) {
+			throw new Error(`Agent process ended with non-zero code: ${exitCode}`);
+		}
+	} catch (e) {
+		error = e;
 	}
 
-
-	const configurationFilePath = await buildConfigurationFile(agentConfig);
-	debug(`Configuration file created in ${configurationFilePath}`);
-
-	debug(`Making sure we have agent version ${agentVersion}`);
-	const jarPath = await ensureAgent(agentVersion);
-	const dirsToScan = dirs.join(",");
-	debug(`Scanning directories ${dirsToScan}`);
-	const command = `java -jar ${jarPath} -c ${configurationFilePath} -d ${dirsToScan} -logLevel off`;
-	debug(`Full command: ${command}`);
-
-	const exitCode = await executeAgentCommand(command);
-	debug(`Agent process exit code: ${exitCode}`);
-	stopWatchingLogs();
-
-	await fs.remove(configurationFilePath);
-	debug(`Configuration file deleted ${configurationFilePath}`);
-
-	if (shouldDeleteLogDir) {
-		await fs.remove(logsPath);
-		debug(`Log files dir deleted ${logsPath}`);
+	debug("Calling cleanup procedures");
+	for (const proc of cleanupProcedures) {
+		try {
+			await proc();
+		} catch (e) {
+			debug("One of the cleanup procedure failed", e);
+		}
 	}
-
-	if (0 !== exitCode) {
-		throw new Error(`Agent process ended with non-zero code: ${exitCode}`);
+	if (error) {
+		throw error;
 	}
 }
