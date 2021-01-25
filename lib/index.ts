@@ -80,7 +80,7 @@ async function buildConfigurationFile(config: WhiteSourceAgentConfiguration): Pr
 	let toIterate = [configEntires];
 	const configPairs = [];
 	for (let i = 0; i < toIterate.length; i++) {
-		if (2 === toIterate[i].length && "string" === typeof toIterate[i][0] && "string" === typeof toIterate[i][1]) {
+		if (2 === toIterate[i].length && "string" === typeof toIterate[i][0] && ("object" !== typeof toIterate[i][1] || null === toIterate[i][1])) {
 			configPairs.push(toIterate[i]);
 			continue;
 		}
