@@ -10,7 +10,7 @@ export interface WhiteSourceAgentConfiguration {
 	includes: string[];
 	excludes?: string[];
 	configFilePath?: string;
-	apiKey?: string;
+	apiKey: string;
 	whiteSourceFolderPath?: string;
 	userKey?: number;
 	updateType?: string;
@@ -171,8 +171,8 @@ export interface WhiteSourceAgentConfiguration {
 	};
 	followSymbolicLinks?: boolean;
 	case?: {
-		sensitive?: {
-			glob?: string;
+		sensitive: {
+			glob: boolean;
 		}
 	};
 	go?: {
