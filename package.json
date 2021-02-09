@@ -1,6 +1,6 @@
 {
 	"name": "@mcesystems/whitesource-unified-agent-wrapper",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "A wrapper module around WhiteSource Unified Agent https://whitesource.atlassian.net/wiki/spaces/WD/pages/804814917/Unified+Agent+Overview",
 	"main": "lib/index",
 	"scripts": {
@@ -29,5 +29,8 @@
 		"@types/tail": "^2.0.0",
 		"ts-node": "^9.1.1",
 		"typescript": "^4.1.3"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }
