@@ -254,7 +254,7 @@ export default async function runAgent(options: RunAgentOptions): Promise<void> 
 		const jarPath = await ensureAgent(agentVersion);
 		const dirsToScan = dirs.join(",");
 		debug(`Scanning directories ${dirsToScan}`);
-		const command = `java -jar ${jarPath} -c ${configurationFilePath} -d ${dirsToScan} -logLevel off`;
+		const command = `java -jar "${jarPath}" -c ${configurationFilePath} -d "${dirsToScan}" -logLevel off`;
 		debug(`Full command: ${command}`);
 
 		const exitCode = await executeAgentCommand(command);
