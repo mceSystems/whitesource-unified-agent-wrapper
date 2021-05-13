@@ -38,7 +38,7 @@ Returns a `Promise<void>` that resolves if the Unified Agent process completed w
 
 
 #### WhiteSourceAgentConfiguration
-As mentioned above, this is a interface representing the [Unified Agent Configuration Parameters](https://whitesource.atlassian.net/wiki/spaces/WD/pages/1544880156/Unified+Agent+Configuration+Parameters).\
+As mentioned above, this is an interface representing the [Unified Agent Configuration Parameters](https://whitesource.atlassian.net/wiki/spaces/WD/pages/1544880156/Unified+Agent+Configuration+Parameters).\
 Each configuration parameter is represented by a field in this interface, and period (`.`) delimited configuration keys are represented by sub hierarchy deeper levels of the interface. \
 For example, if the Unified Agent Configuration Parameters doc states the `docker.pull.maxImages ` configuration parameter, the corresponding object representation is
 ``` ts
