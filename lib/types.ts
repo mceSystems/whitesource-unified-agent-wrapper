@@ -12,7 +12,7 @@ export interface WhiteSourceAgentConfiguration {
 	configFilePath?: string;
 	apiKey: string;
 	whiteSourceFolderPath?: string;
-	userKey?: number;
+	userKey?: string;
 	updateType?: string;
 	updateInventory?: boolean;
 	updateEmptyProject?: boolean;
